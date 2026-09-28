@@ -1,0 +1,13 @@
+/* Kita menggunakan Tailwind CSS untuk mayoritas styling, 
+   namun file ini disiapkan untuk kustomisasi khusus jika diperlukan di masa depan. */
+
+body {
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Menyembunyikan panah pada input number jika nanti digunakan */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
