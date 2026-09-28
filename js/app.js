@@ -2,7 +2,6 @@ const supabaseUrl = 'https://qvikybnkyladsohvqobg.supabase.co';
 const supabaseKey = 'sb_publishable_pme6YeHGDDBLJ3ndML8maw_EUQHhawn';
 const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
 
-// Mengubah array statis menjadi array kosong yang akan diisi dari database
 let menus = [];
 let cart = {};
 
@@ -11,20 +10,17 @@ document.addEventListener('DOMContentLoaded', () => {
     if (urlParams.has('meja')) {
         document.getElementById('table-number').value = urlParams.get('meja');
     }
-    
-    // Panggil data dari database saat halaman web dibuka
     fetchMenus();
 });
 
-// Fungsi mengambil data dari Supabase
 async function fetchMenus() {
     const menuContainer = document.getElementById('menu-container');
     menuContainer.innerHTML = '<div class="text-center py-10"><div class="animate-spin rounded-full h-10 w-10 border-4 border-orange-500 border-t-transparent mx-auto mb-3"></div><p class="text-slate-500 font-medium">Memuat daftar menu...</p></div>';
 
+    // Menghapus filter is_available agar semua menu tertarik, stok diatur di frontend
     const { data, error } = await supabaseClient
         .from('menus')
         .select('*')
-        .eq('is_available', true)
         .order('category', { ascending: true });
 
     if (error) {
@@ -58,16 +54,18 @@ function renderMenu() {
         const categoryMenus = menus.filter(menu => menu.category === category);
         categoryMenus.forEach(menu => {
             cart[menu.id] = 0; 
+            const stock = menu.stock || 0;
+            const isOutOfStock = stock <= 0;
             
-            // Mengubah pemanggilan gambar menjadi menu.image_url sesuai kolom database
             sectionHTML += `
-                <div class="bg-white rounded-2xl p-3 shadow-[0_4px_20px_rgb(0,0,0,0.03)] hover:shadow-[0_4px_25px_rgb(0,0,0,0.06)] transition-all flex items-center justify-between gap-3 border border-slate-100/50">
-                    <img src="${menu.image_url}" alt="${menu.name}" class="w-20 h-20 object-cover rounded-xl shadow-sm">
+                <div class="${isOutOfStock ? 'opacity-60 bg-gray-50' : 'bg-white hover:shadow-[0_4px_25px_rgb(0,0,0,0.06)]'} rounded-2xl p-3 shadow-[0_4px_20px_rgb(0,0,0,0.03)] transition-all flex items-center justify-between gap-3 border border-slate-100/50">
+                    <img src="${menu.image_url}" alt="${menu.name}" class="w-20 h-20 object-cover rounded-xl shadow-sm ${isOutOfStock ? 'grayscale' : ''}">
                     <div class="flex-1 py-1">
                         <h3 class="font-semibold text-slate-800 leading-tight mb-1 text-sm md:text-base">${menu.name}</h3>
                         <p class="text-orange-500 font-bold text-sm">Rp ${menu.price.toLocaleString('id-ID')}</p>
+                        ${isOutOfStock ? '<span class="inline-block mt-1 text-xs font-bold text-red-500 bg-red-100 px-2 py-0.5 rounded">Habis</span>' : `<span class="inline-block mt-1 text-xs font-medium text-green-600 bg-green-100 px-2 py-0.5 rounded">Stok: ${stock}</span>`}
                     </div>
-                    <div class="flex flex-col items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-100">
+                    <div class="flex flex-col items-center gap-1 ${isOutOfStock ? 'hidden' : 'bg-slate-50 p-1 rounded-xl border border-slate-100'}">
                         <button onclick="updateCart(${menu.id}, 1)" class="w-7 h-7 flex items-center justify-center bg-white rounded-lg text-orange-500 font-bold shadow-sm hover:bg-orange-50 transition">+</button>
                         <span id="qty-${menu.id}" class="font-semibold w-7 text-center text-sm text-slate-700">0</span>
                         <button onclick="updateCart(${menu.id}, -1)" class="w-7 h-7 flex items-center justify-center bg-white rounded-lg text-slate-500 font-bold shadow-sm hover:bg-slate-50 transition">-</button>
@@ -81,11 +79,19 @@ function renderMenu() {
     });
 }
 
+// Logika baru untuk mencegah pesanan melebihi stok
 window.updateCart = function(id, change) {
-    if (cart[id] + change >= 0) {
-        cart[id] += change;
+    const targetMenu = menus.find(m => m.id === id);
+    if (!targetMenu) return;
+
+    const newQty = cart[id] + change;
+    
+    if (newQty >= 0 && newQty <= targetMenu.stock) {
+        cart[id] = newQty;
         document.getElementById(`qty-${id}`).innerText = cart[id];
         calculateTotal();
+    } else if (newQty > targetMenu.stock) {
+        alert("Maaf, stok " + targetMenu.name + " hanya tersisa " + targetMenu.stock);
     }
 }
 
@@ -166,6 +172,13 @@ window.processOrder = async function() {
         console.error("Supabase Error:", error);
         alert("Gagal mengirim pesanan. Periksa koneksi internet Anda.");
     } else {
+        // Otomatis kurangi stok di database setelah berhasil pesan
+        for (let item of orderedItems) {
+            const currentMenu = menus.find(m => m.id === item.id);
+            const newStock = currentMenu.stock - item.qty;
+            await supabaseClient.from('menus').update({ stock: newStock }).eq('id', item.id);
+        }
+
         alert("Pesanan berhasil terkirim ke dapur!"); 
         window.location.reload();
     }
