@@ -2,15 +2,8 @@ const supabaseUrl = 'https://qvikybnkyladsohvqobg.supabase.co';
 const supabaseKey = 'sb_publishable_pme6YeHGDDBLJ3ndML8maw_EUQHhawn';
 const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
 
-const menus = [
-    { id: 1, name: 'Nasi Goreng Spesial', price: 25000, category: 'Makanan Utama', img: 'https://images.unsplash.com/photo-1603048297172-c92544798d5e?auto=format&fit=crop&w=200&q=80' },
-    { id: 2, name: 'Mie Goreng Ayam', price: 20000, category: 'Makanan Utama', img: 'https://images.unsplash.com/photo-1612929633738-8fe44f7ec841?auto=format&fit=crop&w=200&q=80' },
-    { id: 3, name: 'Es Teh Manis', price: 5000, category: 'Minuman Segar', img: 'https://images.unsplash.com/photo-1499638673689-79a0b5115d87?auto=format&fit=crop&w=200&q=80' },
-    { id: 4, name: 'Jus Jeruk', price: 12000, category: 'Minuman Segar', img: 'https://images.unsplash.com/photo-1613478223719-2ab802602423?auto=format&fit=crop&w=200&q=80' },
-    { id: 5, name: 'Sambal Terasi', price: 3000, category: 'Tambahan', img: 'https://images.unsplash.com/photo-1598514982205-f36b96d1e8d4?auto=format&fit=crop&w=200&q=80' },
-    { id: 6, name: 'Kerupuk Udang', price: 2000, category: 'Tambahan', img: 'https://images.unsplash.com/photo-1621506289937-a8e4df240d0b?auto=format&fit=crop&w=200&q=80' }
-];
-
+// Mengubah array statis menjadi array kosong yang akan diisi dari database
+let menus = [];
 let cart = {};
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -18,12 +11,39 @@ document.addEventListener('DOMContentLoaded', () => {
     if (urlParams.has('meja')) {
         document.getElementById('table-number').value = urlParams.get('meja');
     }
-    renderMenu();
+    
+    // Panggil data dari database saat halaman web dibuka
+    fetchMenus();
 });
+
+// Fungsi mengambil data dari Supabase
+async function fetchMenus() {
+    const menuContainer = document.getElementById('menu-container');
+    menuContainer.innerHTML = '<div class="text-center py-10"><div class="animate-spin rounded-full h-10 w-10 border-4 border-orange-500 border-t-transparent mx-auto mb-3"></div><p class="text-slate-500 font-medium">Memuat daftar menu...</p></div>';
+
+    const { data, error } = await supabaseClient
+        .from('menus')
+        .select('*')
+        .order('category', { ascending: true });
+
+    if (error) {
+        console.error("Error fetching menus:", error);
+        menuContainer.innerHTML = '<p class="text-center text-red-500 font-semibold py-10">Gagal memuat menu. Silakan refresh halaman.</p>';
+        return;
+    }
+
+    menus = data;
+    renderMenu();
+}
 
 function renderMenu() {
     const menuContainer = document.getElementById('menu-container');
     menuContainer.innerHTML = ''; 
+
+    if (menus.length === 0) {
+        menuContainer.innerHTML = '<p class="text-center text-slate-500 py-10 font-medium">Belum ada menu yang tersedia.</p>';
+        return;
+    }
 
     const categories = [...new Set(menus.map(item => item.category))];
 
@@ -38,10 +58,10 @@ function renderMenu() {
         categoryMenus.forEach(menu => {
             cart[menu.id] = 0; 
             
-            // Desain Card Modern
+            // Mengubah pemanggilan gambar menjadi menu.image_url sesuai kolom database
             sectionHTML += `
                 <div class="bg-white rounded-2xl p-3 shadow-[0_4px_20px_rgb(0,0,0,0.03)] hover:shadow-[0_4px_25px_rgb(0,0,0,0.06)] transition-all flex items-center justify-between gap-3 border border-slate-100/50">
-                    <img src="${menu.img}" alt="${menu.name}" class="w-20 h-20 object-cover rounded-xl shadow-sm">
+                    <img src="${menu.image_url}" alt="${menu.name}" class="w-20 h-20 object-cover rounded-xl shadow-sm">
                     <div class="flex-1 py-1">
                         <h3 class="font-semibold text-slate-800 leading-tight mb-1 text-sm md:text-base">${menu.name}</h3>
                         <p class="text-orange-500 font-bold text-sm">Rp ${menu.price.toLocaleString('id-ID')}</p>
@@ -93,7 +113,6 @@ window.showConfirmationModal = function() {
 
     const modal = document.getElementById('confirm-modal');
     modal.classList.remove('hidden');
-    // Efek transisi masuk
     setTimeout(() => {
         modal.classList.remove('opacity-0');
         modal.children[0].classList.remove('scale-95');
@@ -102,7 +121,6 @@ window.showConfirmationModal = function() {
 
 window.closeConfirmationModal = function() {
     const modal = document.getElementById('confirm-modal');
-    // Efek transisi keluar
     modal.classList.add('opacity-0');
     modal.children[0].classList.add('scale-95');
     setTimeout(() => {
@@ -147,7 +165,6 @@ window.processOrder = async function() {
         console.error("Supabase Error:", error);
         alert("Gagal mengirim pesanan. Periksa koneksi internet Anda.");
     } else {
-        // Notifikasi sukses yang lebih mulus (bisa diganti SweetAlert nanti jika mau)
         alert("Pesanan berhasil terkirim ke dapur!"); 
         window.location.reload();
     }
