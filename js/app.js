@@ -24,6 +24,7 @@ async function fetchMenus() {
     const { data, error } = await supabaseClient
         .from('menus')
         .select('*')
+        .eq('is_available', true)
         .order('category', { ascending: true });
 
     if (error) {
